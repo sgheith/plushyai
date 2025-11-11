@@ -1,5 +1,6 @@
 import { TableOfContents } from "@/components/legal/table-of-contents";
 import { LastUpdated } from "@/components/legal/last-updated";
+import { BackToTop } from "@/components/legal/back-to-top";
 import { Shield, Eye, Share2, Cookie, Lock, UserCheck } from "lucide-react";
 
 export default function PrivacyPolicyPage() {
@@ -372,14 +373,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           {/* Back to top */}
-          <div className="mt-12 pt-8 border-t text-center">
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="text-primary hover:underline"
-            >
-              Back to Top ↑
-            </button>
-          </div>
+          <BackToTop />
         </main>
 
         {/* Table of Contents */}

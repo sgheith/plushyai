@@ -7,10 +7,10 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { PlushifyIcon } from "@/components/plushify-logo";
 import { FeatureCard } from "@/components/landing/feature-card";
+import { BeforeAfterSlider } from "@/components/landing/before-after-slider";
 import {
   mockFeatures,
   mockTestimonials,
-  mockGenerations,
 } from "@/lib/mock-data";
 import {
   Upload,
@@ -54,22 +54,14 @@ export default function Home() {
             </Button>
           </div>
 
-          {/* Hero Image/Showcase */}
-          <div className="mt-12 relative">
-            <div className="rounded-2xl border-4 border-primary/20 bg-muted/50 p-8 shadow-2xl backdrop-blur">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {mockGenerations.slice(0, 4).map((gen, index) => (
-                  <div
-                    key={gen.id}
-                    className="aspect-square rounded-lg bg-background/50 border-2 border-primary/10 overflow-hidden hover:border-primary/30 transition-all hover:scale-105"
-                  >
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
-                      Plushie {index + 1}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Before/After Showcase */}
+          <div className="mt-12 max-w-4xl mx-auto">
+            <BeforeAfterSlider
+              beforeImage="/example/before.jpg"
+              afterImage="/example/after.webp"
+              beforeLabel="Original Photo"
+              afterLabel="Plushified"
+            />
           </div>
         </div>
       </section>
@@ -167,49 +159,6 @@ export default function Home() {
                 keep as a digital keepsake
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Sample Gallery Section */}
-      <section className="bg-muted/30 py-16 md:py-24">
-        <div className="container mx-auto px-4">
-          <div className="text-center space-y-4 mb-12">
-            <h2 className="text-3xl md:text-5xl font-bold">See the Magic</h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Check out these amazing transformations created by our users
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {mockGenerations.slice(0, 8).map((gen, index) => (
-              <Card
-                key={gen.id}
-                className="overflow-hidden group cursor-pointer hover:shadow-xl transition-all hover:-translate-y-1"
-              >
-                <div className="aspect-square bg-muted/50 relative">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center space-y-2">
-                      <div className="text-4xl">🧸</div>
-                      <div className="text-xs text-muted-foreground">
-                        Example {index + 1}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Badge>View Details</Badge>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <div className="text-center mt-8">
-            <Button asChild variant="outline" size="lg">
-              <Link href="/gallery">
-                View Full Gallery <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
           </div>
         </div>
       </section>

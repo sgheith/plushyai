@@ -2,6 +2,7 @@
 
 import { TableOfContents } from "@/components/legal/table-of-contents";
 import { LastUpdated } from "@/components/legal/last-updated";
+import { BackToTop } from "@/components/legal/back-to-top";
 import { Cookie, Info, Settings, FileText } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -411,14 +412,7 @@ export default function CookiePolicyPage() {
             </section>
 
             {/* Back to top */}
-            <div className="mt-12 pt-8 border-t text-center">
-              <button
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className="text-primary hover:underline"
-              >
-                Back to Top ↑
-              </button>
-            </div>
+            <BackToTop />
           </main>
 
           {/* Table of Contents */}
