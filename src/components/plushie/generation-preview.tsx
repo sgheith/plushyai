@@ -35,7 +35,7 @@ export function GenerationPreview({ generations }: GenerationPreviewProps) {
               <div className="relative aspect-square">
                 <Image
                   src={generation.plushieImage}
-                  alt="Plushie generation"
+                  alt={`${generation.subjectType} plushie generated on ${formatGenerationDate(generation.createdAt)}`}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />

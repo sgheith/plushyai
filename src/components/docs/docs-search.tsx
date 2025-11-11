@@ -10,7 +10,6 @@ export function DocsSearch() {
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     // TODO: Implement search functionality when backend is ready
-    console.log("Searching for:", searchQuery);
   };
 
   return (

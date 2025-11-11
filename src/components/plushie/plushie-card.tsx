@@ -24,7 +24,7 @@ export function PlushieCard({
       <div className="relative aspect-square overflow-hidden">
         <Image
           src={image}
-          alt="Plushie"
+          alt={`Generated plushie created on ${formatGenerationDate(date)}`}
           fill
           className="object-cover transition-transform duration-300 group-hover:scale-105"
         />

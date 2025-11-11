@@ -272,6 +272,7 @@ export default function HowToUsePage() {
           <section id="generation" className="mb-12">
             <div className="mb-6 flex items-center gap-3">
               <div className="rounded-lg bg-primary/10 p-2">
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                 <Image className="h-6 w-6 text-primary" aria-hidden="true" />
               </div>
               <h2 className="text-3xl font-semibold">Generating Plushies</h2>

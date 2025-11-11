@@ -35,7 +35,6 @@ export default function GalleryPage() {
   // Handle downloading a plushie (mock)
   const handleDownload = (generation: PlushieGeneration) => {
     // Mock download functionality
-    console.log("Downloading:", generation.id);
     // In a real app, this would trigger an actual download
     alert(`Downloading ${generation.id}... (mock)`);
   };

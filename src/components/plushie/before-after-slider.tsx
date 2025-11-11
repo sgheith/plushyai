@@ -72,7 +72,7 @@ export function BeforeAfterSlider({
       <div className="absolute inset-0">
         <Image
           src={afterImage}
-          alt="After"
+          alt="After transformation - plushie version"
           fill
           className="object-cover"
           priority
@@ -86,7 +86,7 @@ export function BeforeAfterSlider({
       >
         <Image
           src={beforeImage}
-          alt="Before"
+          alt="Before transformation - original photo"
           fill
           className="object-cover"
           priority

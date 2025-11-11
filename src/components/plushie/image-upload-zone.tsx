@@ -140,7 +140,7 @@ export function ImageUploadZone({
           <div className="relative aspect-square w-full overflow-hidden rounded-lg border-2 border-primary">
             <Image
               src={preview}
-              alt="Preview"
+              alt="Uploaded image preview - ready to transform into a plushie"
               fill
               className="object-cover"
             />
