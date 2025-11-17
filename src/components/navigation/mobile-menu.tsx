@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { CreditBadge } from "@/components/credits/credit-badge";
 import { useSession } from "@/lib/auth-client";
+import { useCredits } from "@/hooks/use-credits";
 import { SignInButton } from "@/components/auth/sign-in-button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ interface MobileMenuProps {
 
 export function MobileMenu({ open, onClose, navigation }: MobileMenuProps) {
   const { data: session, isPending } = useSession();
+  const { credits } = useCredits();
 
   // Prevent body scroll when menu is open
   useEffect(() => {
@@ -101,7 +103,7 @@ export function MobileMenu({ open, onClose, navigation }: MobileMenuProps) {
               </div>
 
               <Link href="/pricing" onClick={onClose}>
-                <CreditBadge creditCount={(session.user as typeof session.user & { credits?: number }).credits ?? 0} className="w-fit" />
+                <CreditBadge creditCount={credits} className="w-fit" />
               </Link>
             </div>
           )}

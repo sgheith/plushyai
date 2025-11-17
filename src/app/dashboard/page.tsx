@@ -9,6 +9,7 @@ import { CreditDisplay } from "@/components/credits/credit-display";
 import { GenerationPreview } from "@/components/plushie/generation-preview";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { auth } from "@/lib/auth";
+import { getUserFromDatabase } from "@/lib/auth-types";
 import { getRecentGenerations } from "@/lib/mock-data";
 import {
   Sparkles,
@@ -23,7 +24,11 @@ export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
 
-  const user = session.user as typeof session.user & { credits: number };
+  // Fetch the full user data from the database to get current credits
+  const dbUser = await getUserFromDatabase(session.user.id);
+  if (!dbUser) redirect("/sign-in");
+
+  const user = { ...session.user, ...dbUser };
   const recentGenerations = getRecentGenerations(4);
   const currentDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",

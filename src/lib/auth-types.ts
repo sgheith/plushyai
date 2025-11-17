@@ -1,4 +1,7 @@
 import { Session } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { user } from "@/lib/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Extended user type that includes custom fields defined in Better Auth configuration.
@@ -71,4 +74,16 @@ export function getUserCredits(session: Session): number {
 export function isAdmin(session: Session): boolean {
   const user = session.user as Partial<UserWithCustomFields>;
   return user.platformRole === "admin";
+}
+
+/**
+ * Fetches the full user data from the database by user ID.
+ * This ensures you get the latest credit balance and other user fields.
+ *
+ * @param userId - The user ID from the session
+ * @returns The user object with all fields, or null if not found
+ */
+export async function getUserFromDatabase(userId: string) {
+  const [dbUser] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+  return dbUser ?? null;
 }

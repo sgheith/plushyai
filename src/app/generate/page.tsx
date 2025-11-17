@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { getUserFromDatabase } from "@/lib/auth-types";
 import { GeneratePageClient } from "@/components/generate/generate-page-client";
 
 /**
@@ -26,9 +27,11 @@ export default async function GeneratePage() {
     redirect("/sign-in");
   }
 
-  // Type-safe access to custom user fields
-  const user = session.user as typeof session.user & { credits?: number };
-  const userCredits = user.credits ?? 0;
+  // Fetch the full user data from the database to get current credits
+  const dbUser = await getUserFromDatabase(session.user.id);
+  if (!dbUser) redirect("/sign-in");
+
+  const userCredits = dbUser.credits;
 
   // Pass authenticated data to the client component
   return <GeneratePageClient userCredits={userCredits} />;

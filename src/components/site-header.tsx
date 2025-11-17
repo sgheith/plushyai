@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useSession } from "@/lib/auth-client";
+import { useCredits } from "@/hooks/use-credits";
 import { SignInButton } from "./auth/sign-in-button";
 import { SignOutButton } from "./auth/sign-out-button";
 import { MobileMenu } from "./navigation/mobile-menu";
@@ -32,6 +33,7 @@ const navigation = [
 export function SiteHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: session, isPending } = useSession();
+  const { credits } = useCredits();
 
   // Filter navigation based on authentication state
   const protectedRoutes = ["/dashboard", "/generate", "/gallery"];
@@ -66,7 +68,7 @@ export function SiteHeader() {
             {/* Credit Badge - only show when authenticated */}
             {session && (
               <Link href="/pricing" className="hidden sm:block">
-                <CreditBadge creditCount={(session.user as typeof session.user & { credits?: number }).credits ?? 0} />
+                <CreditBadge creditCount={credits} />
               </Link>
             )}
 

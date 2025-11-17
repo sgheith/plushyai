@@ -1,16 +1,26 @@
 "use client";
 
-import { Download, Eye } from "lucide-react";
+import { Download, Eye, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatGenerationDate } from "@/lib/mock-data";
 
 interface PlushieCardProps {
   image: string;
   date: string;
   onView?: () => void;
   onDownload?: () => void;
+  onDelete?: () => void;
+}
+
+// Helper function to format date
+function formatGenerationDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function PlushieCard({
@@ -18,6 +28,7 @@ export function PlushieCard({
   date,
   onView,
   onDownload,
+  onDelete,
 }: PlushieCardProps) {
   return (
     <Card className="group overflow-hidden transition-all hover:shadow-lg">
@@ -36,6 +47,7 @@ export function PlushieCard({
             variant="secondary"
             onClick={onView}
             className="rounded-full"
+            aria-label="View plushie"
           >
             <Eye className="h-4 w-4" />
           </Button>
@@ -44,9 +56,21 @@ export function PlushieCard({
             variant="secondary"
             onClick={onDownload}
             className="rounded-full"
+            aria-label="Download plushie"
           >
             <Download className="h-4 w-4" />
           </Button>
+          {onDelete && (
+            <Button
+              size="icon"
+              variant="destructive"
+              onClick={onDelete}
+              className="rounded-full"
+              aria-label="Delete plushie"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 

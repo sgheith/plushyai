@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
+import { useCredits } from "@/hooks/use-credits";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function UserButton() {
   const { data: session, isPending } = useSession();
+  const { credits } = useCredits();
 
   if (isPending) {
     return <Skeleton className="h-8 w-8 rounded-full" />;
@@ -25,7 +27,7 @@ export function UserButton() {
     return null;
   }
 
-  const user = session.user as typeof session.user & { credits?: number };
+  const user = session.user;
   const initials = user.name
     ?.split(" ")
     .map((n) => n[0])
@@ -51,7 +53,7 @@ export function UserButton() {
         <DropdownMenuItem className="cursor-pointer" onClick={(e) => e.preventDefault()}>
           <div className="flex items-center justify-between w-full">
             <span>Credits</span>
-            <Badge variant="secondary">{user.credits ?? 0}</Badge>
+            <Badge variant="secondary">{credits}</Badge>
           </div>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

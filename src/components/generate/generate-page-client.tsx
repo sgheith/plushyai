@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { ArrowLeft, Download, Share2, Upload, Sparkles, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ImageUploadZone } from "@/components/plushie/image-upload-zone";
 import { BeforeAfterSlider } from "@/components/plushie/before-after-slider";
 import { CreditBadge } from "@/components/credits/credit-badge";
 import { Breadcrumbs } from "@/components/navigation/breadcrumbs";
+import { generatePlushie } from "@/app/actions/generate-plushie";
 
 type GenerationState = "upload" | "preview" | "generating" | "success" | "error";
 type SubjectType = "person" | "pet" | "other";
@@ -22,11 +25,13 @@ interface GeneratePageClientProps {
  * Authentication is handled by the parent Server Component.
  */
 export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
+  const router = useRouter();
   const [state, setState] = useState<GenerationState>("upload");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [subjectType, setSubjectType] = useState<SubjectType>("person");
-  const [generatedImage, setGeneratedImage] = useState<string>("/examples/plushie-1.jpg");
+  const [generatedImage, setGeneratedImage] = useState<string>("");
+  const [generationId, setGenerationId] = useState<string>("");
   const [error, setError] = useState<string>("");
 
   const handleFileUpload = (file: File) => {
@@ -45,19 +50,57 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
     setUploadedFile(null);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!uploadedFile) {
+      const errorMsg = "Please upload an image first.";
+      setError(errorMsg);
+      setState("error");
+      toast.error(errorMsg);
+      return;
+    }
+
+    if (userCredits < 1) {
+      const errorMsg = "Insufficient credits. Purchase more to continue generating plushies.";
+      setError(errorMsg);
+      setState("error");
+      toast.error(errorMsg);
+      return;
+    }
+
     setState("generating");
-    // Simulate API call
-    setTimeout(() => {
-      // 10% chance of error for demo
-      if (Math.random() < 0.1) {
-        setError("Failed to generate plushie. The image quality might be too low. Please try a different image.");
-        setState("error");
-      } else {
-        setGeneratedImage("/examples/plushie-1.jpg");
+    setError("");
+
+    try {
+      // Create FormData and append the file
+      const formData = new FormData();
+      formData.append("image", uploadedFile);
+
+      // Call server action
+      const result = await generatePlushie(formData);
+
+      if (result.success && result.data) {
+        // Success! Set the generated image and ID
+        setGeneratedImage(result.data.plushieImageUrl);
+        setGenerationId(result.data.id);
         setState("success");
+        toast.success("Plushie generated successfully!");
+
+        // Refresh the page to update credits
+        router.refresh();
+      } else {
+        // Handle error from server action
+        const errorMessage = result.error || "Failed to generate plushie. Please try again.";
+        setError(errorMessage);
+        setState("error");
+        toast.error(errorMessage);
       }
-    }, 3000);
+    } catch (error) {
+      console.error("Generation error:", error);
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      setError(errorMessage);
+      setState("error");
+      toast.error(errorMessage);
+    }
   };
 
   const handleRetry = () => {
@@ -70,20 +113,35 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
     setUploadedImage(null);
     setUploadedFile(null);
     setGeneratedImage("");
+    setGenerationId("");
     setError("");
   };
 
-  const handleDownload = () => {
-    // Mock download functionality
-    const link = document.createElement("a");
-    link.href = generatedImage;
-    link.download = "plushie.png";
-    link.click();
+  const handleDownload = async () => {
+    if (!generatedImage) return;
+
+    try {
+      // Fetch the image and create a download link
+      const response = await fetch(generatedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `plushie-${generationId || Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success("Download started");
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Failed to download the image. Please try again.");
+    }
   };
 
   const handleShare = () => {
     // Mock share functionality
-    alert("Share functionality coming soon!");
+    toast.info("Share functionality coming soon!");
   };
 
   return (
@@ -305,10 +363,15 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
                 </Button>
               </div>
 
-              <div className="mt-8 text-center">
-                <Link href="/gallery" className="text-primary hover:underline">
-                  View all your plushies in the gallery →
+              <div className="mt-8 text-center space-y-4">
+                <Link href="/gallery">
+                  <Button size="lg" variant="default">
+                    View Gallery
+                  </Button>
                 </Link>
+                <p className="text-sm text-muted-foreground">
+                  See all your plushie creations in one place
+                </p>
               </div>
             </Card>
           </div>

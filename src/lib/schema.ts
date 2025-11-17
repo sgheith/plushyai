@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, index, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -76,4 +76,25 @@ export const verification = pgTable("verification", {
   identifierIdx: index("verification_identifier_idx").on(table.identifier),
   // Index for cleaning up expired tokens
   expiresAtIdx: index("verification_expires_at_idx").on(table.expiresAt),
+}));
+
+export const plushieGenerations = pgTable("plushie_generations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  originalImageUrl: text("original_image_url").notNull(),
+  plushieImageUrl: text("plushie_image_url").notNull(),
+  subjectType: text("subject_type", { enum: ["person", "pet", "other"] }).notNull(),
+  status: text("status", { enum: ["processing", "completed", "failed"] }).notNull().default("processing"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+}, (table) => ({
+  // Index for querying user's generations
+  userIdIdx: index("plushie_generations_user_id_idx").on(table.userId),
+  // Index for sorting by creation date
+  createdAtIdx: index("plushie_generations_created_at_idx").on(table.createdAt),
+  // Composite index for user + created_at (most common query pattern)
+  userCreatedIdx: index("plushie_generations_user_created_idx").on(table.userId, table.createdAt),
 }));

@@ -1,225 +1,233 @@
-# Agentic Coding Boilerplate - AI Assistant Guidelines
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-This is a Next.js 15 boilerplate for building AI-powered applications with authentication, database, and modern UI components.
+**Plushify** - An AI-powered web application that transforms uploaded images into adorable plushified versions. Users upload images (people, pets, objects), and the app generates cute plush toy versions using Google's Gemini AI. Features a credit-based system, user galleries, and secure authentication.
 
-### Tech Stack
+**Tech Stack:**
+- Next.js 15 (App Router) with React 19 and TypeScript
+- Better Auth for authentication (Google OAuth)
+- Drizzle ORM with PostgreSQL
+- Vercel AI SDK with OpenRouter (Gemini models)
+- Vercel Blob Storage for image hosting
+- shadcn/ui components with Tailwind CSS 4
 
-- **Framework**: Next.js 15 with App Router, React 19, TypeScript
-- **AI Integration**: Vercel AI SDK 5 + OpenRouter (access to 100+ AI models)
-- **Authentication**: BetterAuth with Google OAuth
-- **Database**: PostgreSQL with Drizzle ORM
-- **UI**: shadcn/ui components with Tailwind CSS 4
-- **Styling**: Tailwind CSS with dark mode support (next-themes)
-
-## AI Integration with OpenRouter
-
-### Key Points
-
-- This project uses **OpenRouter** as the AI provider, NOT direct OpenAI
-- OpenRouter provides access to 100+ AI models through a single unified API
-- Default model: `openai/gpt-5-mini` (configurable via `OPENROUTER_MODEL` env var)
-- Users browse models at: https://openrouter.ai/models
-- Users get API keys from: https://openrouter.ai/settings/keys
-
-### AI Implementation Files
-
-- `src/app/api/chat/route.ts` - Chat API endpoint using OpenRouter
-- Package: `@openrouter/ai-sdk-provider` (not `@ai-sdk/openai`)
-- Import: `import { openrouter } from "@openrouter/ai-sdk-provider"`
-
-## Project Structure
-
-```
-src/
-├── app/                          # Next.js App Router
-│   ├── api/
-│   │   ├── auth/[...all]/       # Better Auth catch-all route
-│   │   ├── chat/route.ts        # AI chat endpoint (OpenRouter)
-│   │   └── diagnostics/         # System diagnostics
-│   ├── chat/page.tsx            # AI chat interface (protected)
-│   ├── dashboard/page.tsx       # User dashboard (protected)
-│   ├── profile/page.tsx         # User profile (protected)
-│   ├── page.tsx                 # Home/landing page
-│   └── layout.tsx               # Root layout
-├── components/
-│   ├── auth/                    # Authentication components
-│   │   ├── sign-in-button.tsx
-│   │   ├── sign-out-button.tsx
-│   │   └── user-profile.tsx
-│   ├── ui/                      # shadcn/ui components
-│   │   ├── button.tsx
-│   │   ├── card.tsx
-│   │   ├── dialog.tsx
-│   │   ├── dropdown-menu.tsx
-│   │   ├── avatar.tsx
-│   │   ├── badge.tsx
-│   │   ├── separator.tsx
-│   │   ├── mode-toggle.tsx      # Dark/light mode toggle
-│   │   └── github-stars.tsx
-│   ├── site-header.tsx          # Main navigation header
-│   ├── site-footer.tsx          # Footer component
-│   ├── theme-provider.tsx       # Dark mode provider
-│   ├── setup-checklist.tsx      # Setup guide component
-│   └── starter-prompt-modal.tsx # Starter prompts modal
-└── lib/
-    ├── auth.ts                  # Better Auth server config
-    ├── auth-client.ts           # Better Auth client hooks
-    ├── db.ts                    # Database connection
-    ├── schema.ts                # Drizzle schema (users, sessions, etc.)
-    └── utils.ts                 # Utility functions (cn, etc.)
-```
-
-## Environment Variables
-
-Required environment variables (see `env.example`):
-
-```env
-# Database
-POSTGRES_URL=postgresql://user:password@localhost:5432/db_name
-
-# Better Auth
-BETTER_AUTH_SECRET=32-char-random-string
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-
-# AI via OpenRouter
-OPENROUTER_API_KEY=sk-or-v1-your-key
-OPENROUTER_MODEL=openai/gpt-5-mini  # or any model from openrouter.ai/models
-
-# App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-## Available Scripts
+## Development Commands
 
 ```bash
-npm run dev          # Start dev server (DON'T run this yourself - ask user)
-npm run build        # Build for production (runs db:migrate first)
-npm run start        # Start production server
-npm run lint         # Run ESLint (ALWAYS run after changes)
-npm run typecheck    # TypeScript type checking (ALWAYS run after changes)
-npm run db:generate  # Generate database migrations
-npm run db:migrate   # Run database migrations
-npm run db:push      # Push schema changes to database
-npm run db:studio    # Open Drizzle Studio (database GUI)
-npm run db:dev       # Push schema for development
-npm run db:reset     # Reset database (drop all tables)
+# Development
+pnpm dev                # Start dev server with Turbopack
+pnpm build              # Run migrations then build for production
+pnpm start              # Start production server
+
+# Code Quality (IMPORTANT: Always run after changes)
+pnpm lint               # Run ESLint
+pnpm typecheck          # TypeScript type checking
+
+# Database Management
+pnpm db:generate        # Generate migration files from schema changes
+pnpm db:migrate         # Run pending migrations (used in build)
+pnpm db:push            # Push schema directly to DB (development only)
+pnpm db:dev             # Alias for db:push (quick dev iterations)
+pnpm db:studio          # Open Drizzle Studio GUI
+pnpm db:reset           # DROP all tables and re-push (destructive)
 ```
 
-## Documentation Files
+**Critical Development Rule:** Always run `pnpm lint` and `pnpm typecheck` after completing changes. This is enforced by project rules.
 
-The project includes technical documentation in `docs/`:
+## Architecture
 
-- `docs/technical/ai/streaming.md` - AI streaming implementation guide
-- `docs/technical/ai/structured-data.md` - Structured data extraction
-- `docs/technical/react-markdown.md` - Markdown rendering guide
-- `docs/technical/betterauth/polar.md` - Polar payment integration
-- `docs/business/starter-prompt.md` - Business context for AI prompts
+### Authentication Flow (Better Auth)
 
-## Guidelines for AI Assistants
+**Server Configuration** (`src/lib/auth.ts`):
+- Better Auth instance configured with Google OAuth
+- Security features: CSRF protection, rate limiting (10 req/min), secure cookies
+- Session: 7-day expiry, cookie caching (5 min) for performance
+- Custom user fields: `credits` (number), `platformRole` (string)
+- Environment validation at startup ensures required vars exist
 
-### CRITICAL RULES
+**Client Utilities** (`src/lib/auth-client.ts`):
+- Export: `signIn`, `signOut`, `useSession`, `getSession`
+- Use `useSession()` hook in client components for auth state
+- Use `auth.api.getSession()` in server actions/components
 
-1. **ALWAYS run lint and typecheck** after completing changes:
+**API Route** (`src/app/api/auth/[...all]/route.ts`):
+- Single catch-all handler for all auth endpoints
+- Handles: `/api/auth/sign-in/google`, `/api/auth/callback/google`, etc.
 
-   ```bash
-   npm run lint && npm run typecheck
-   ```
+**Protected Routes Pattern:**
+```tsx
+// Server Component
+const session = await auth.api.getSession({ headers: await headers() });
+if (!session?.user) redirect('/sign-in');
 
-2. **NEVER start the dev server yourself**
+// Server Action
+const session = await auth.api.getSession({ headers: await headers() });
+if (!session?.user) return { success: false, error: "Unauthorized" };
+```
 
-   - If you need dev server output, ask the user to provide it
-   - Don't run `npm run dev` or `pnpm dev`
+### Database Architecture
 
-3. **Use OpenRouter, NOT OpenAI directly**
+**Schema Location:** `src/lib/schema.ts` (single source of truth)
 
-   - Import from `@openrouter/ai-sdk-provider`
-   - Use `openrouter()` function, not `openai()`
-   - Model names follow OpenRouter format: `provider/model-name`
+**Core Tables:**
+- `user`: Better Auth users + custom fields (credits, platformRole)
+- `session`: Better Auth sessions (indexed on userId, expiresAt, token)
+- `account`: OAuth accounts (Google)
+- `verification`: Email verification tokens
+- `plushie_generations`: User-generated plushies with URLs and metadata
 
-4. **Styling Guidelines**
+**Connection:** `src/lib/db.ts` exports singleton `db` instance using postgres.js driver
 
-   - Stick to standard Tailwind CSS utility classes
-   - Use shadcn/ui color tokens (e.g., `bg-background`, `text-foreground`)
-   - Avoid custom colors unless explicitly requested
-   - Support dark mode with appropriate Tailwind classes
+**Migration Workflow:**
+1. Modify `src/lib/schema.ts`
+2. Run `pnpm db:generate` to create migration file in `drizzle/`
+3. Run `pnpm db:migrate` to apply (or `pnpm db:push` for dev)
+4. Commit both schema and migration files
 
-5. **Authentication**
+**Indexes:** All foreign keys and frequently queried columns have indexes for performance
 
-   - Server-side: Import from `@/lib/auth` (Better Auth instance)
-   - Client-side: Import hooks from `@/lib/auth-client`
-   - Protected routes should check session in Server Components
-   - Use existing auth components from `src/components/auth/`
+### Image Generation Pipeline
 
-6. **Database Operations**
+**Core Flow** (`src/app/actions/generate-plushie.ts`):
+```
+1. Auth check � session validation
+2. Credit check � ensure user has e1 credit
+3. Upload original � Vercel Blob Storage
+4. AI Analysis � Gemini vision model identifies subject
+5. AI Generation � Gemini image model creates plushified version
+6. Upload generated � Vercel Blob Storage
+7. Atomic deduction � SQL UPDATE with WHERE credits >= 1
+8. Database record � Insert into plushie_generations
+```
 
-   - Use Drizzle ORM (imported from `@/lib/db`)
-   - Schema is defined in `@/lib/schema`
-   - Always run migrations after schema changes
-   - PostgreSQL is the database (not SQLite, MySQL, etc.)
+**Two-Step AI Process:**
+- **Step 1:** `google/gemini-2.5-flash-image` analyzes uploaded image
+  - Returns: subject type (person/pet/other), description, key features
+- **Step 2:** `google/gemini-2.5-flash-image-preview` generates plushie
+  - Input: original image + analysis-based prompt
+  - Output: PNG image in `result.files[0].uint8Array`
 
-7. **Component Creation**
+**Error Handling:**
+- Failed generations trigger cleanup: delete uploaded Blobs
+- Credit deduction is atomic (UPDATE with WHERE clause prevents race conditions)
+- All errors return user-friendly messages
 
-   - Use existing shadcn/ui components when possible
-   - Follow the established patterns in `src/components/ui/`
-   - Support both light and dark modes
-   - Use TypeScript with proper types
+**Storage Structure:**
+```
+Vercel Blob:
+  plushify/originals/{userId}/{timestamp}.{ext}
+  plushify/generated/{userId}/{timestamp}.png
+```
 
-8. **API Routes**
-   - Follow Next.js 15 App Router conventions
-   - Use Route Handlers (route.ts files)
-   - Return Response objects
-   - Handle errors appropriately
+### Server Actions Pattern
 
-### Best Practices
+Located in `src/app/actions/`:
+- `generate-plushie.ts`: Main generation logic
+- `get-generations.ts`: Fetch user's gallery with pagination
+- `delete-generation.ts`: Remove generation + cleanup Blobs
 
-- Read existing code patterns before creating new features
-- Maintain consistency with established file structure
-- Use the documentation files when implementing related features
-- Test changes with lint and typecheck before considering complete
-- When modifying AI functionality, refer to `docs/technical/ai/` guides
+**Common Pattern:**
+```typescript
+"use server";
+export async function actionName(...): Promise<{ success: boolean; data?: T; error?: string }> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return { success: false, error: "Unauthorized" };
+  // ... action logic
+}
+```
 
-### Common Tasks
+### Component Architecture
 
-**Adding a new page:**
+**Page Structure:**
+- `/` - Landing page (public)
+- `/sign-in` - Google OAuth sign-in (public)
+- `/dashboard` - User overview with credits (protected)
+- `/generate` - Image upload + generation UI (protected)
+- `/gallery` - User's plushie gallery with pagination (protected)
+- `/profile` - User profile management (protected)
+- `/pricing` - Credit packages (public)
+- `/admin` - Admin dashboard for platformRole="admin" (protected)
 
-1. Create in `src/app/[route]/page.tsx`
-2. Use Server Components by default
-3. Add to navigation if needed
+**Key Components:**
+- `src/components/generate/generate-page-client.tsx`: Main generation form
+- `src/components/gallery/gallery-client.tsx`: Gallery grid with pagination
+- `src/components/plushie/plushie-card.tsx`: Before/after slider card
+- `src/components/auth/user-button.tsx`: User menu with credits display
 
-**Adding a new API route:**
+**UI Library:** shadcn/ui components in `src/components/ui/`
 
-1. Create in `src/app/api/[route]/route.ts`
-2. Export HTTP method handlers (GET, POST, etc.)
-3. Use proper TypeScript types
+### Environment Variables
 
-**Adding authentication to a page:**
+**Required:**
+```env
+POSTGRES_URL                # PostgreSQL connection string
+BETTER_AUTH_SECRET         # Min 32 chars (generate: openssl rand -base64 32)
+GOOGLE_CLIENT_ID           # Google OAuth credentials
+GOOGLE_CLIENT_SECRET       # Google OAuth credentials
+OPENROUTER_API_KEY         # For AI generation (OpenRouter account)
+BLOB_READ_WRITE_TOKEN      # Vercel Blob Storage (required for uploads)
+NEXT_PUBLIC_APP_URL        # App URL (http://localhost:3000 in dev)
+```
 
-1. Import auth instance: `import { auth } from "@/lib/auth"`
-2. Get session: `const session = await auth.api.getSession({ headers: await headers() })`
-3. Check session and redirect if needed
+**Optional:**
+```env
+BETTER_AUTH_URL            # Overrides baseURL if needed
+OPENROUTER_MODEL           # Default: "openai/gpt-5-mini"
+POLAR_WEBHOOK_SECRET       # For payment webhooks (if implementing)
+POLAR_ACCESS_TOKEN         # For Polar API (if implementing)
+```
 
-**Working with the database:**
+## Important Patterns
 
-1. Update schema in `src/lib/schema.ts`
-2. Generate migration: `npm run db:generate`
-3. Apply migration: `npm run db:migrate`
-4. Import `db` from `@/lib/db` to query
+### Credit System
+- Credits stored in `user.credits` (integer, default: 0)
+- Deduction uses SQL: `UPDATE user SET credits = credits - 1 WHERE id = ? AND credits >= 1`
+- This prevents negative credits even with concurrent requests
+- Always check `creditResult.length === 0` to detect failed deduction
 
-**Modifying AI chat:**
+### Image Handling
+- Max upload size: 10MB (validated in server action)
+- Supported: any `image/*` MIME type
+- Images converted to base64 for AI SDK multimodal messages
+- Generated images extracted from `result.files[0].uint8Array`
+- Next.js Image component configured for `*.public.blob.vercel-storage.com`
 
-1. Backend: `src/app/api/chat/route.ts`
-2. Frontend: `src/app/chat/page.tsx`
-3. Reference streaming docs: `docs/technical/ai/streaming.md`
-4. Remember to use OpenRouter, not direct OpenAI
+### Error Handling
+- Server actions return structured `{ success, data?, error? }` responses
+- Use `toast()` from `sonner` for user notifications
+- Always cleanup resources (Blob storage) on failure
+- Log errors with `console.error` for debugging
 
-## Package Manager
+## Common Gotchas
 
-This project uses **pnpm** (see `pnpm-lock.yaml`). When running commands:
+1. **Better Auth Session:** Must use `await headers()` in server actions (Next.js requirement)
+2. **Database Migrations:** Always commit migration files with schema changes
+3. **Image Generation:** The `-preview` model is required for image generation; regular model only analyzes
+4. **Credits Race Condition:** Use atomic SQL updates, not read-then-write
+5. **Vercel Blob Cleanup:** Remember to delete Blobs when deleting database records
+6. **Dev Server:** Never start dev server automatically; ask user if needed (project rule)
 
-- Use `pnpm` instead of `npm` when possible
-- Scripts defined in package.json work with `pnpm run [script]`
+## Testing Workflow
+
+Before any commit or deployment:
+1. Run `pnpm lint` - must pass with no errors
+2. Run `pnpm typecheck` - must pass with no errors
+3. Test affected functionality manually
+4. Verify database migrations apply cleanly
+
+## Specifications
+
+Project specifications are documented in `specs/`:
+- Feature requirements and implementation plans
+- Reference these when adding or modifying features
+- Each feature has `requirements.md` and `implementation-plan.md`
+
+## Documentation
+
+Technical documentation in `docs/technical/`:
+- Better Auth integration guides
+- AI SDK patterns (streaming, structured data, image generation)
+- React Markdown usage

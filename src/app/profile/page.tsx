@@ -25,12 +25,17 @@ import {
   DollarSign,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { getUserFromDatabase } from "@/lib/auth-types";
 
 export default async function ProfilePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
 
-  const user = session.user as typeof session.user & { credits: number };
+  // Fetch the full user data from the database to get current credits
+  const dbUser = await getUserFromDatabase(session.user.id);
+  if (!dbUser) redirect("/sign-in");
+
+  const user = { ...session.user, ...dbUser };
 
   // Temporary placeholders for fields not yet in schema
   const totalGenerations = 0; // Will be calculated from generations table later
