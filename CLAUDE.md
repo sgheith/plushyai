@@ -12,6 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Drizzle ORM with PostgreSQL
 - Vercel AI SDK with OpenRouter (Gemini models)
 - Vercel Blob Storage for image hosting
+- Inngest for background job processing
 - shadcn/ui components with Tailwind CSS 4
 
 ## Development Commands
@@ -19,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Development
 pnpm dev                # Start dev server with Turbopack
+pnpm dev:inngest        # Start Inngest dev server (runs on http://localhost:8288)
 pnpm build              # Run migrations then build for production
 pnpm start              # Start production server
 
@@ -34,6 +36,11 @@ pnpm db:dev             # Alias for db:push (quick dev iterations)
 pnpm db:studio          # Open Drizzle Studio GUI
 pnpm db:reset           # DROP all tables and re-push (destructive)
 ```
+
+**Development Workflow for Background Jobs:**
+Run two terminals concurrently:
+1. Terminal 1: `pnpm dev` (Next.js dev server on http://localhost:3000)
+2. Terminal 2: `pnpm dev:inngest` (Inngest dev server on http://localhost:8288)
 
 **Critical Development Rule:** Always run `pnpm lint` and `pnpm typecheck` after completing changes. This is enforced by project rules.
 
@@ -89,19 +96,43 @@ if (!session?.user) return { success: false, error: "Unauthorized" };
 
 **Indexes:** All foreign keys and frequently queried columns have indexes for performance
 
-### Image Generation Pipeline
+### Image Generation Pipeline (Async with Inngest)
 
-**Core Flow** (`src/app/actions/generate-plushie.ts`):
+**Architecture:** Event-driven background processing using Inngest for improved reliability, observability, and user experience.
+
+**Initiation Flow** (`src/app/actions/generate-plushie.ts`):
 ```
-1. Auth check ’ session validation
-2. Credit check ’ ensure user has e1 credit
-3. Upload original ’ Vercel Blob Storage
-4. AI Analysis ’ Gemini vision model identifies subject
-5. AI Generation ’ Gemini image model creates plushified version
-6. Upload generated ’ Vercel Blob Storage
-7. Atomic deduction ’ SQL UPDATE with WHERE credits >= 1
-8. Database record ’ Insert into plushie_generations
+1. Auth check â†’ session validation
+2. Credit availability check â†’ credits - processingCount >= 1
+3. Concurrency check â†’ max 5 processing generations per user
+4. Create DB record â†’ status="processing" (reserves credit)
+5. Convert image â†’ base64 for event payload
+6. Send Inngest event â†’ "plushie/generate.requested"
+7. Return immediately â†’ { generationId } for client polling
 ```
+
+**Background Processing** (`src/inngest/functions/generate-plushie.ts`):
+Runs asynchronously with step-based execution for granular retries:
+```
+Step 1: Upload original â†’ Vercel Blob Storage
+Step 2: AI Analysis â†’ Gemini vision model identifies subject
+Step 3: AI Generation + Upload â†’ Generate plushie AND upload to Blob (combined to avoid 4MB step output limit)
+Step 4: Finalize â†’ Deduct credit atomically, set status="completed"
+```
+
+**Important:** Step 3 combines generation and upload because returning large binary image data between steps would exceed Inngest's 4MB step output limit.
+
+**Status Tracking** (`src/app/actions/get-generation-status.ts`):
+- Client polls every 3 seconds for status updates
+- Statuses: "processing" â†’ "completed" or "failed"
+- 5-minute timeout with error fallback
+- Ownership validation ensures users only see their generations
+
+**Retry Mechanism** (`src/app/actions/retry-generation.ts`):
+- Failed generations can be retried without re-upload
+- No additional credit charged for retries
+- Reuses original image from Blob storage
+- Sends new Inngest event with existing image data
 
 **Two-Step AI Process:**
 - **Step 1:** `google/gemini-2.5-flash-image` analyzes uploaded image
@@ -111,21 +142,31 @@ if (!session?.user) return { success: false, error: "Unauthorized" };
   - Output: PNG image in `result.files[0].uint8Array`
 
 **Error Handling:**
+- Automatic retries: 3 attempts with exponential backoff (Inngest)
 - Failed generations trigger cleanup: delete uploaded Blobs
-- Credit deduction is atomic (UPDATE with WHERE clause prevents race conditions)
+- Credits never deducted on failure (only reserved during processing)
+- Failure handler updates status to "failed" for retry UI
 - All errors return user-friendly messages
 
 **Storage Structure:**
 ```
 Vercel Blob:
-  plushify/originals/{userId}/{timestamp}.{ext}
-  plushify/generated/{userId}/{timestamp}.png
+  plushify/originals/{userId}/{generationId}.{ext}
+  plushify/generated/{userId}/{generationId}.png
 ```
+
+**Observability:**
+- Local: Inngest Dev UI at http://localhost:8288 shows all runs, steps, retries
+- Production: Inngest Cloud dashboard with metrics and alerts
+- Structured logging with `[Inngest]` prefix for easy filtering
 
 ### Server Actions Pattern
 
 Located in `src/app/actions/`:
-- `generate-plushie.ts`: Main generation logic
+- `generate-plushie.ts`: Initiate background generation (sends Inngest event)
+- `get-generation-status.ts`: Poll generation status for client updates
+- `get-processing-count.ts`: Get count of processing generations (for concurrency validation)
+- `retry-generation.ts`: Retry failed generation without re-upload
 - `get-generations.ts`: Fetch user's gallery with pagination
 - `delete-generation.ts`: Remove generation + cleanup Blobs
 
@@ -159,6 +200,80 @@ export async function actionName(...): Promise<{ success: boolean; data?: T; err
 
 **UI Library:** shadcn/ui components in `src/components/ui/`
 
+### Background Jobs with Inngest
+
+**Architecture:** Event-driven background processing for long-running tasks (image generation, AI processing).
+
+**Core Components:**
+
+1. **Inngest Client** (`src/inngest/client.ts`):
+   - Singleton Inngest instance with app ID "plushify"
+   - Type-safe event definitions for all background jobs
+   - Auto-loads environment variables for authentication
+
+2. **Functions Directory** (`src/inngest/functions/`):
+   - `generate-plushie.ts`: Main image generation background job
+   - Each function defines: trigger event, retry config, concurrency limits
+   - Step-based execution allows granular retries and observability
+
+3. **API Route** (`src/app/api/inngest/route.ts`):
+   - Serves as webhook endpoint for Inngest to invoke functions
+   - Registers all Inngest functions with the framework
+   - Handles GET (health check), POST (run function), PUT (introspection)
+
+**Event Pattern:**
+```typescript
+// Trigger event (from server action)
+await inngest.send({
+  name: "plushie/generate.requested",
+  data: { generationId, userId, imageData, imageType }
+});
+
+// Function handler (in Inngest function)
+inngest.createFunction(
+  { id: "generate-plushie", retries: 3, concurrency: { limit: 5, key: "event.data.userId" } },
+  { event: "plushie/generate.requested" },
+  async ({ event, step }) => {
+    // Step-based execution with automatic retries
+    await step.run("step-name", async () => { /* logic */ });
+  }
+);
+```
+
+**Retry Strategy:**
+- Automatic retries: 3 attempts with exponential backoff
+- Retries configured per-function in Inngest config
+- Transient failures (network issues, AI API timeouts) automatically retried
+- Non-retriable errors (validation, insufficient credits) fail immediately
+- Use `NonRetriableError` to skip retries for known failures
+
+**Concurrency Control:**
+- Per-user concurrency limit: 5 (prevents overwhelming AI APIs)
+- Key-based: `event.data.userId` ensures limit per user, not global
+- Additional user limit enforced at application level
+- Failed/completed jobs free up concurrency slots automatically
+
+**Local Development:**
+- Run `pnpm dev:inngest` to start Inngest Dev Server
+- Access UI at http://localhost:8288 to view:
+  - All function runs with step-by-step execution details
+  - Event payloads and return values
+  - Retry attempts and error messages
+  - Function logs and timing information
+
+**Production Deployment:**
+- Set `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` in environment
+- Inngest Cloud automatically discovers functions via `/api/inngest` route
+- View runs, metrics, and alerts in Inngest Cloud dashboard
+- Configure failure alerts and monitoring thresholds
+
+**Troubleshooting:**
+- Check Inngest Dev UI for step-by-step execution details
+- Look for `[Inngest]` prefix in server logs
+- Verify `/api/inngest` route is accessible (GET should return health check)
+- Ensure background jobs aren't queued if Inngest dev server isn't running
+- For production, verify environment variables are set correctly
+
 ### Environment Variables
 
 **Required:**
@@ -172,21 +287,49 @@ BLOB_READ_WRITE_TOKEN      # Vercel Blob Storage (required for uploads)
 NEXT_PUBLIC_APP_URL        # App URL (http://localhost:3000 in dev)
 ```
 
-**Optional:**
+**Optional (Development):**
 ```env
 BETTER_AUTH_URL            # Overrides baseURL if needed
 OPENROUTER_MODEL           # Default: "openai/gpt-5-mini"
 POLAR_WEBHOOK_SECRET       # For payment webhooks (if implementing)
 POLAR_ACCESS_TOKEN         # For Polar API (if implementing)
+INNGEST_EVENT_KEY          # Optional for local dev (required in production)
+INNGEST_SIGNING_KEY        # Optional for local dev (required in production)
 ```
+
+**Production-Only (Inngest):**
+```env
+INNGEST_EVENT_KEY          # Event authentication for Inngest Cloud
+INNGEST_SIGNING_KEY        # Function invocation security for Inngest Cloud
+```
+
+**Inngest Setup:**
+- Local development works without keys (uses Inngest Dev Server)
+- Production requires both keys from [Inngest Cloud](https://www.inngest.com)
+- Keys auto-loaded from environment variables by Inngest SDK
 
 ## Important Patterns
 
-### Credit System
+### Credit System (Reservation Pattern)
+
+**Credit Reservation:**
 - Credits stored in `user.credits` (integer, default: 0)
-- Deduction uses SQL: `UPDATE user SET credits = credits - 1 WHERE id = ? AND credits >= 1`
+- Available credits = `total credits - processing count`
+- Processing count = `COUNT(*) WHERE status='processing' AND userId=X`
+- Credits reserved when generation starts (status="processing")
+- Credits deducted only when generation completes successfully
+- Credits automatically released if generation fails (status="failed")
+
+**Atomic Deduction:**
+- Uses SQL: `UPDATE user SET credits = credits - 1 WHERE id = ? AND credits >= 1`
 - This prevents negative credits even with concurrent requests
 - Always check `creditResult.length === 0` to detect failed deduction
+
+**Concurrency Limits:**
+- Maximum 5 concurrent generations per user (enforced by Inngest)
+- Client-side validation checks processing count before submission
+- Server-side validation double-checks before creating generation record
+- Users cannot start new generation if `availableCredits < 1` or `processingCount >= 5`
 
 ### Image Handling
 - Max upload size: 10MB (validated in server action)
@@ -209,6 +352,10 @@ POLAR_ACCESS_TOKEN         # For Polar API (if implementing)
 4. **Credits Race Condition:** Use atomic SQL updates, not read-then-write
 5. **Vercel Blob Cleanup:** Remember to delete Blobs when deleting database records
 6. **Dev Server:** Never start dev server automatically; ask user if needed (project rule)
+7. **Inngest Dev Server:** Must run `pnpm dev:inngest` in separate terminal for background jobs to work locally
+8. **Generation Status:** Generations stay in "processing" state until Inngest function completes; don't assume synchronous completion
+9. **Polling Cleanup:** Always clear polling intervals on component unmount to prevent memory leaks
+10. **Credit Reservation:** Available credits shown in UI must account for processing generations: `credits - processingCount`
 
 ## Testing Workflow
 

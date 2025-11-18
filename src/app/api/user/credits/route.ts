@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { getUserFromDatabase } from "@/lib/auth-types";
+import { db } from "@/lib/db";
+import { user, plushieGenerations } from "@/lib/schema";
+import { eq, sql } from "drizzle-orm";
 
 /**
  * GET /api/user/credits
- * Returns the current user's credit balance from the database.
+ * Returns the current user's credit balance and processing count.
+ * Available credits = total credits - processing count
  */
 export async function GET() {
   try {
@@ -15,13 +18,33 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const dbUser = await getUserFromDatabase(session.user.id);
+    const userId = session.user.id;
 
-    if (!dbUser) {
+    // Query credits and processing count in a single query
+    const [creditData] = await db
+      .select({
+        credits: user.credits,
+        processingCount: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${plushieGenerations}
+          WHERE ${plushieGenerations.userId} = ${userId}
+          AND ${plushieGenerations.status} = 'processing'
+        )`,
+      })
+      .from(user)
+      .where(eq(user.id, userId));
+
+    if (!creditData) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ credits: dbUser.credits });
+    const availableCredits = creditData.credits - creditData.processingCount;
+
+    return NextResponse.json({
+      credits: creditData.credits,
+      processingCount: creditData.processingCount,
+      availableCredits,
+    });
   } catch (error) {
     console.error("Error fetching user credits:", error);
     return NextResponse.json(

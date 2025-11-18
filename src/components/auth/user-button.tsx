@@ -11,13 +11,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { SignOutButton } from "./sign-out-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle } from "lucide-react";
 
 export function UserButton() {
   const { data: session, isPending } = useSession();
-  const { credits } = useCredits();
+  const { credits, processingCount, availableCredits } = useCredits();
 
   if (isPending) {
     return <Skeleton className="h-8 w-8 rounded-full" />;
@@ -52,10 +59,34 @@ export function UserButton() {
         <DropdownMenuSeparator />
         <DropdownMenuItem className="cursor-pointer" onClick={(e) => e.preventDefault()}>
           <div className="flex items-center justify-between w-full">
-            <span>Credits</span>
+            <span>Total Credits</span>
             <Badge variant="secondary">{credits}</Badge>
           </div>
         </DropdownMenuItem>
+        {processingCount > 0 && (
+          <DropdownMenuItem className="cursor-pointer" onClick={(e) => e.preventDefault()}>
+            <div className="flex items-center justify-between w-full">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Available</span>
+                      {availableCredits === 0 && (
+                        <AlertCircle className="h-3 w-3 text-yellow-600" />
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{processingCount} credit{processingCount !== 1 ? 's' : ''} reserved for processing</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <Badge variant={availableCredits === 0 ? "destructive" : "outline"}>
+                {availableCredits}
+              </Badge>
+            </div>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <SignOutButton />

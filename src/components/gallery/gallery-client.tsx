@@ -19,6 +19,8 @@ import { Breadcrumbs } from "@/components/navigation/breadcrumbs";
 import { Pagination } from "@/components/gallery/pagination";
 import { DeleteConfirmationDialog } from "@/components/gallery/delete-confirmation-dialog";
 import { deleteGeneration } from "@/app/actions/delete-generation";
+import { retryGeneration } from "@/app/actions/retry-generation";
+import { markGenerationFailed } from "@/app/actions/mark-generation-failed";
 
 interface Generation {
   id: string;
@@ -52,6 +54,10 @@ export function GalleryClient({
   const [deletingGenerationId, setDeletingGenerationId] = useState<
     string | null
   >(null);
+  const [retryingGenerationId, setRetryingGenerationId] = useState<
+    string | null
+  >(null);
+  const [markingFailedId, setMarkingFailedId] = useState<string | null>(null);
 
   // Handle viewing a plushie in the modal
   const handleView = (generation: Generation) => {
@@ -123,6 +129,54 @@ export function GalleryClient({
     setGenerationToDelete(null);
   };
 
+  // Handle retry for failed generations
+  const handleRetry = async (generationId: string) => {
+    setRetryingGenerationId(generationId);
+
+    try {
+      const result = await retryGeneration(generationId);
+
+      if (result.success) {
+        toast.success("Generation retry started! The page will refresh in a moment.");
+        // Refresh to show updated status
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        toast.error(result.error || "Failed to retry generation");
+      }
+    } catch (error) {
+      console.error("Retry error:", error);
+      toast.error("An error occurred while retrying the generation");
+    } finally {
+      setRetryingGenerationId(null);
+    }
+  };
+
+  // Handle marking stuck generation as failed
+  const handleMarkFailed = async (generationId: string) => {
+    setMarkingFailedId(generationId);
+
+    try {
+      const result = await markGenerationFailed(generationId);
+
+      if (result.success) {
+        toast.success("Generation marked as failed. You can retry it now.");
+        // Refresh to show updated status
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        toast.error(result.error || "Failed to mark generation as failed");
+      }
+    } catch (error) {
+      console.error("Mark failed error:", error);
+      toast.error("An error occurred while marking the generation as failed");
+    } finally {
+      setMarkingFailedId(null);
+    }
+  };
+
   // Format date helper
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString("en-US", {
@@ -172,9 +226,14 @@ export function GalleryClient({
               key={generation.id}
               image={generation.plushieImageUrl}
               date={generation.createdAt.toString()}
+              status={generation.status as "processing" | "completed" | "failed"}
               onView={() => handleView(generation)}
               onDownload={() => handleDownload(generation)}
               onDelete={() => handleDeleteClick(generation.id)}
+              onRetry={() => handleRetry(generation.id)}
+              onMarkFailed={() => handleMarkFailed(generation.id)}
+              isRetrying={retryingGenerationId === generation.id}
+              isMarkingFailed={markingFailedId === generation.id}
             />
           ))}
         </div>

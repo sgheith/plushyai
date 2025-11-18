@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Download, Share2, Upload, Sparkles, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,8 @@ import { BeforeAfterSlider } from "@/components/plushie/before-after-slider";
 import { CreditBadge } from "@/components/credits/credit-badge";
 import { Breadcrumbs } from "@/components/navigation/breadcrumbs";
 import { generatePlushie } from "@/app/actions/generate-plushie";
+import { getGenerationStatus } from "@/app/actions/get-generation-status";
+import { getProcessingCount } from "@/app/actions/get-processing-count";
 
 type GenerationState = "upload" | "preview" | "generating" | "success" | "error";
 type SubjectType = "person" | "pet" | "other";
@@ -33,6 +35,95 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
   const [generatedImage, setGeneratedImage] = useState<string>("");
   const [generationId, setGenerationId] = useState<string>("");
   const [error, setError] = useState<string>("");
+
+  // Polling state
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingStartTimeRef = useRef<number | null>(null);
+
+  // Polling cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup polling interval on unmount
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
+
+  // Start polling for generation status
+  const startPolling = (genId: string) => {
+    pollingStartTimeRef.current = Date.now();
+
+    // Poll immediately
+    pollGenerationStatus(genId);
+
+    // Set up polling interval (every 3 seconds)
+    pollingIntervalRef.current = setInterval(() => {
+      pollGenerationStatus(genId);
+    }, 3000);
+  };
+
+  // Stop polling
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    pollingStartTimeRef.current = null;
+  };
+
+  // Poll generation status
+  const pollGenerationStatus = async (genId: string) => {
+    try {
+      // Check for timeout (5 minutes = 300000ms)
+      if (pollingStartTimeRef.current) {
+        const elapsedTime = Date.now() - pollingStartTimeRef.current;
+        if (elapsedTime > 300000) {
+          stopPolling();
+          setState("error");
+          setError("Generation timed out after 5 minutes. Please try again or contact support.");
+          toast.error("Generation timed out. Please try again.");
+          return;
+        }
+      }
+
+      const result = await getGenerationStatus(genId);
+
+      if (!result.success) {
+        console.error("Status check error:", result.error);
+        return;
+      }
+
+      if (result.status === "completed") {
+        stopPolling();
+
+        // Set the generated images
+        if (result.plushieImageUrl && result.originalImageUrl) {
+          setGeneratedImage(result.plushieImageUrl);
+          setGenerationId(genId);
+          setState("success");
+          toast.success("Plushie generated successfully!");
+
+          // Refresh to update credits
+          router.refresh();
+        } else {
+          setState("error");
+          setError("Generation completed but image URLs are missing.");
+          toast.error("Generation completed but images are missing.");
+        }
+      } else if (result.status === "failed") {
+        stopPolling();
+        setState("error");
+        setError("Generation failed. Please try again or upload a different image.");
+        toast.error("Generation failed. Please try again.");
+      }
+      // If status is "processing", continue polling
+    } catch (error) {
+      console.error("Polling error:", error);
+      // Don't stop polling on network errors, just log them
+    }
+  };
 
   const handleFileUpload = (file: File) => {
     setUploadedFile(file);
@@ -67,6 +158,18 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
       return;
     }
 
+    // Check processing count before allowing generation (client-side validation)
+    const processingCountResult = await getProcessingCount();
+    if (processingCountResult.success && processingCountResult.count !== undefined) {
+      if (processingCountResult.count >= 5) {
+        const errorMsg = "You have 5 generations in progress. Please wait for one to complete.";
+        setError(errorMsg);
+        setState("error");
+        toast.error(errorMsg);
+        return;
+      }
+    }
+
     setState("generating");
     setError("");
 
@@ -75,21 +178,16 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
       const formData = new FormData();
       formData.append("image", uploadedFile);
 
-      // Call server action
+      // Call server action (now returns immediately with generationId)
       const result = await generatePlushie(formData);
 
-      if (result.success && result.data) {
-        // Success! Set the generated image and ID
-        setGeneratedImage(result.data.plushieImageUrl);
-        setGenerationId(result.data.id);
-        setState("success");
-        toast.success("Plushie generated successfully!");
-
-        // Refresh the page to update credits
-        router.refresh();
+      if (result.success && result.generationId) {
+        // Start polling for status updates
+        toast.info("Generation started! This may take 10-30 seconds.");
+        startPolling(result.generationId);
       } else {
         // Handle error from server action
-        const errorMessage = result.error || "Failed to generate plushie. Please try again.";
+        const errorMessage = result.error || "Failed to start generation. Please try again.";
         setError(errorMessage);
         setState("error");
         toast.error(errorMessage);
@@ -104,11 +202,13 @@ export function GeneratePageClient({ userCredits }: GeneratePageClientProps) {
   };
 
   const handleRetry = () => {
+    stopPolling();
     setError("");
     setState("preview");
   };
 
   const handleGenerateAnother = () => {
+    stopPolling();
     setState("upload");
     setUploadedImage(null);
     setUploadedFile(null);
