@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, integer, index, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, index, uuid, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -97,4 +97,44 @@ export const plushieGenerations = pgTable("plushie_generations", {
   createdAtIdx: index("plushie_generations_created_at_idx").on(table.createdAt),
   // Composite index for user + created_at (most common query pattern)
   userCreatedIdx: index("plushie_generations_user_created_idx").on(table.userId, table.createdAt),
+}));
+
+export const purchases = pgTable("purchases", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  polarOrderId: text("polar_order_id").notNull().unique(),
+  polarCheckoutId: text("polar_checkout_id"),
+  productId: text("product_id").notNull(),
+  productName: text("product_name").notNull(),
+  amount: integer("amount").notNull(), // Amount in cents
+  credits: integer("credits").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  // Index for querying user's purchases
+  userIdIdx: index("purchases_user_id_idx").on(table.userId),
+  // Index for looking up by Polar order ID (webhook processing)
+  polarOrderIdIdx: index("purchases_polar_order_id_idx").on(table.polarOrderId),
+}));
+
+export const creditTransactions = pgTable("credit_transactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["purchase", "generation", "refund", "adjustment"] }).notNull(),
+  amount: integer("amount").notNull(), // Positive for additions, negative for deductions
+  balanceAfter: integer("balance_after").notNull(),
+  relatedId: text("related_id"), // References purchase ID or generation ID
+  description: text("description"),
+  metadata: jsonb("metadata"), // Additional context as JSON
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Index for querying user's transactions
+  userIdIdx: index("credit_transactions_user_id_idx").on(table.userId),
+  // Index for filtering by transaction type
+  typeIdx: index("credit_transactions_type_idx").on(table.type),
+  // Index for looking up by related ID
+  relatedIdIdx: index("credit_transactions_related_id_idx").on(table.relatedId),
+  // Composite index for user + created_at (most common query pattern)
+  userCreatedIdx: index("credit_transactions_user_created_idx").on(table.userId, table.createdAt),
 }));

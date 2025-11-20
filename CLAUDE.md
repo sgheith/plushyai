@@ -8,11 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Tech Stack:**
 - Next.js 15 (App Router) with React 19 and TypeScript
-- Better Auth for authentication (Google OAuth)
+- Better Auth for authentication (Google OAuth) with Polar payment integration
 - Drizzle ORM with PostgreSQL
 - Vercel AI SDK with OpenRouter (Gemini models)
 - Vercel Blob Storage for image hosting
 - Inngest for background job processing
+- Polar for payment processing and credit purchases
 - shadcn/ui components with Tailwind CSS 4
 
 ## Development Commands
@@ -87,6 +88,8 @@ if (!session?.user) return { success: false, error: "Unauthorized" };
 - `account`: OAuth accounts (Google)
 - `verification`: Email verification tokens
 - `plushie_generations`: User-generated plushies with URLs and metadata
+- `purchases`: Credit purchase records with Polar order details (unique constraint on polarOrderId)
+- `credit_transactions`: Complete audit trail of all credit movements (purchases, generations, refunds, adjustments)
 
 **Connection:** `src/lib/db.ts` exports singleton `db` instance using postgres.js driver
 
@@ -276,6 +279,112 @@ inngest.createFunction(
 - Ensure background jobs aren't queued if Inngest dev server isn't running
 - For production, verify environment variables are set correctly
 
+### Payment Integration with Polar
+
+**Architecture:** Polar handles payment processing for credit purchases with Better Auth integration and async webhook processing via Inngest.
+
+**Core Components:**
+
+1. **Polar Configuration** (`src/lib/polar-config.ts`):
+   - Centralized product definitions with IDs, slugs, names, credits, and prices
+   - Three credit packages: Basic (30 credits, $9), Pro (100 credits, $19), Premium (200 credits, $29)
+   - Helper functions: `getProductBySlug()` and `getProductById()`
+   - Product IDs correspond to Polar Sandbox environment
+
+2. **Better Auth Integration** (`src/lib/auth.ts`):
+   - Polar plugin with `checkout()`, `portal()`, and `webhooks()` sub-plugins
+   - Auto-creates Polar customer on user signup (`createCustomerOnSignUp: true`)
+   - Checkout redirects to `/checkout/success` after payment
+   - Webhook handler sends Inngest event `polar/order.paid` for async processing
+
+3. **Client Integration** (`src/lib/auth-client.ts`):
+   - Exported `checkout()` and `customer` methods from Polar client
+   - Used in pricing cards: `await authClient.checkout({ slug: "basic" })`
+   - Redirects to Polar-hosted checkout page
+
+4. **Inngest Purchase Processor** (`src/inngest/functions/process-purchase.ts`):
+   - Handles `polar/order.paid` webhook events asynchronously
+   - **Step 1:** Idempotency check (prevent duplicate credit additions)
+   - **Step 2:** Validate product configuration
+   - **Step 3:** Create purchase record in database
+   - **Step 4:** Add credits atomically with transaction logging
+   - Automatic retries: 3 attempts with exponential backoff
+
+**Database Tables:**
+
+**`purchases` table:**
+- Tracks all credit purchases with Polar order details
+- Unique constraint on `polarOrderId` ensures idempotency
+- Fields: userId, polarOrderId, polarCheckoutId, productId, productName, amount, credits, status, timestamps
+- Status values: "pending" or "completed"
+
+**`credit_transactions` table:**
+- Complete audit trail of all credit movements
+- Types: "purchase" (credits added), "generation" (credits spent), "refund", "adjustment"
+- Fields: userId, type, amount, balanceAfter, relatedId, description, metadata (JSON)
+- Indexed on userId, type, and relatedId for fast queries
+
+**User Flow:**
+
+1. User clicks "Get Started" on pricing page (`/pricing`)
+2. `authClient.checkout({ slug })` redirects to Polar-hosted checkout
+3. User completes payment on Polar
+4. Polar redirects to `/checkout/success?checkout_id=xxx`
+5. Polar sends webhook to `/api/auth/polar/webhooks`
+6. Better Auth verifies signature and triggers Inngest event
+7. `process-purchase` function adds credits atomically
+8. User sees updated credit balance (usually within seconds)
+
+**Transaction Tracking:**
+
+- **Purchase transactions:** Created when order is paid (type: "purchase", amount: positive)
+- **Generation transactions:** Created when plushie is generated (type: "generation", amount: -1)
+- Every transaction records `balanceAfter` for complete audit trail
+- Metadata field stores additional context (orderId, productId, generationId)
+
+**Idempotency:**
+
+- Duplicate webhooks are detected by checking for existing `polarOrderId`
+- If duplicate detected, function returns early without adding credits
+- Prevents double-crediting even if Polar retries webhooks
+
+**Components:**
+
+- `src/components/pricing/pricing-card.tsx`: Checkout button with loading state
+- `src/app/checkout/success/page.tsx`: Success page after payment
+- `src/components/credits/transaction-history.tsx`: Transaction log display
+- `src/app/actions/get-transactions.ts`: Fetch user's transaction history
+- `src/app/actions/get-purchases.ts`: Fetch user's purchase history
+
+**Local Development with Polar:**
+
+1. Start Next.js dev server: `pnpm dev`
+2. Start Inngest dev server: `pnpm dev:inngest`
+3. Install ngrok if needed: `npm install -g ngrok`
+4. Start ngrok tunnel: `ngrok http 3000`
+5. Update Polar webhook URL to: `https://YOUR_NGROK_URL/api/auth/polar/webhooks`
+6. Test checkout flow with Polar sandbox test cards
+7. Monitor webhook processing in Inngest Dev UI at http://localhost:8288
+
+**Testing Checklist:**
+
+- Verify checkout redirects to Polar
+- Complete test purchase with sandbox card
+- Confirm redirect to `/checkout/success`
+- Check credits added to user account
+- Verify purchase record in `purchases` table
+- Verify transaction record in `credit_transactions` table
+- Test duplicate webhook (should not add credits twice)
+- Generate plushie and verify credit deduction tracked
+
+**Security:**
+
+- Webhook signature verification using `POLAR_WEBHOOK_SECRET`
+- Invalid signatures rejected automatically by Better Auth
+- No credit card data stored in application (Polar handles PCI compliance)
+- Atomic database transactions prevent race conditions
+- Unique constraints prevent duplicate credit additions
+
 ### Environment Variables
 
 **Required:**
@@ -287,14 +396,15 @@ GOOGLE_CLIENT_SECRET       # Google OAuth credentials
 OPENROUTER_API_KEY         # For AI generation (OpenRouter account)
 BLOB_READ_WRITE_TOKEN      # Vercel Blob Storage (required for uploads)
 NEXT_PUBLIC_APP_URL        # App URL (http://localhost:3000 in dev)
+POLAR_ACCESS_TOKEN         # Polar API token (sandbox or production)
+POLAR_WEBHOOK_SECRET       # Polar webhook signature verification
+POLAR_SERVER               # Polar environment ("sandbox" or "production")
 ```
 
 **Optional (Development):**
 ```env
 BETTER_AUTH_URL            # Overrides baseURL if needed
 OPENROUTER_MODEL           # Default: "openai/gpt-5-mini"
-POLAR_WEBHOOK_SECRET       # For payment webhooks (if implementing)
-POLAR_ACCESS_TOKEN         # For Polar API (if implementing)
 INNGEST_EVENT_KEY          # Optional for local dev (required in production)
 INNGEST_SIGNING_KEY        # Optional for local dev (required in production)
 ```
@@ -358,6 +468,11 @@ INNGEST_SIGNING_KEY        # Function invocation security for Inngest Cloud
 8. **Generation Status:** Generations stay in "processing" state until Inngest function completes; don't assume synchronous completion
 9. **Polling Cleanup:** Always clear polling intervals on component unmount to prevent memory leaks
 10. **Credit Reservation:** Available credits shown in UI must account for processing generations: `credits - processingCount`
+11. **Polar Webhooks:** Need ngrok tunnel for local development; update Polar webhook URL to ngrok HTTPS URL
+12. **Webhook Idempotency:** Polar may send duplicate webhooks; always check for existing `polarOrderId` before processing
+13. **Credit Addition Timing:** Credits added asynchronously via Inngest; may take a few seconds to appear after payment
+14. **Product Slug Mapping:** Pricing page "elite" tier maps to "premium" in Polar config; handle mapping when passing slug to checkout
+15. **Transaction Logging:** Always wrap credit changes in database transactions and log to `credit_transactions` table
 
 ## Testing Workflow
 

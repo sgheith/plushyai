@@ -1,4 +1,4 @@
-import { Inngest } from "inngest";
+import { Inngest, EventSchemas } from "inngest";
 
 // Type-safe event definitions for Plushify
 export type Events = {
@@ -10,6 +10,16 @@ export type Events = {
       imageType: string; // MIME type (e.g., "image/png")
     };
   };
+  "polar/order.paid": {
+    data: {
+      orderId: string;
+      checkoutId: string | null;
+      userId: string;
+      productId: string | null;
+      amount: number;
+      createdAt: string;
+    };
+  };
 };
 
 // Create singleton Inngest client instance
@@ -18,4 +28,5 @@ export type Events = {
 // - INNGEST_SIGNING_KEY (optional for local dev, required for production)
 export const inngest = new Inngest({
   id: "plushify",
+  schemas: new EventSchemas().fromRecord<Events>(),
 });

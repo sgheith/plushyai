@@ -1,7 +1,11 @@
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { nextCookies } from "better-auth/next-js"
+import { polar, checkout, portal, webhooks } from "@polar-sh/better-auth"
+import { Polar } from "@polar-sh/sdk"
 import { db } from "./db"
+import { POLAR_PRODUCTS } from "./polar-config"
+import { inngest } from "@/inngest/client"
 
 /**
  * Validates that a required environment variable exists.
@@ -40,6 +44,17 @@ function validateBetterAuthSecret(secret: string): void {
 // Validate and retrieve required environment variables at module initialization
 const betterAuthSecret = getRequiredEnvVar('BETTER_AUTH_SECRET');
 validateBetterAuthSecret(betterAuthSecret);
+
+// Polar environment variables
+const polarAccessToken = getRequiredEnvVar('POLAR_ACCESS_TOKEN');
+const polarWebhookSecret = getRequiredEnvVar('POLAR_WEBHOOK_SECRET');
+const polarServer = (process.env.POLAR_SERVER || "sandbox") as "sandbox" | "production";
+
+// Initialize Polar SDK client
+const polarClient = new Polar({
+  accessToken: polarAccessToken,
+  server: polarServer,
+});
 
 /**
  * Better Auth configuration for the application.
@@ -144,6 +159,37 @@ export const auth = betterAuth({
   // nextCookies enables proper cookie handling in Server Actions
   plugins: [
     nextCookies(),
+    polar({
+      client: polarClient,
+      createCustomerOnSignUp: true,
+      use: [
+        checkout({
+          products: POLAR_PRODUCTS.map((product) => ({
+            productId: product.id,
+            slug: product.slug,
+          })),
+          successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/checkout/success`,
+        }),
+        portal(),
+        webhooks({
+          secret: polarWebhookSecret,
+          onOrderPaid: async (payload) => {
+            // Send event to Inngest for async processing
+            await inngest.send({
+              name: "polar/order.paid",
+              data: {
+                orderId: payload.data.id,
+                checkoutId: payload.data.checkoutId,
+                userId: payload.data.userId,
+                productId: payload.data.productId,
+                amount: payload.data.totalAmount,
+                createdAt: payload.data.createdAt.toISOString(),
+              },
+            });
+          },
+        }),
+      ],
+    }),
   ],
 })
 

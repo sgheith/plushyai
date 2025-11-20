@@ -5,6 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+import { toast } from "sonner";
 
 interface PricingCardProps {
   name: string;
@@ -13,6 +16,7 @@ interface PricingCardProps {
   features: string[];
   isPopular?: boolean;
   className?: string;
+  slug: string;
 }
 
 export function PricingCard({
@@ -22,7 +26,22 @@ export function PricingCard({
   features,
   isPopular = false,
   className,
+  slug,
 }: PricingCardProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    try {
+      setIsLoading(true);
+      await authClient.checkout({ slug });
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to start checkout. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Card
       className={cn(
@@ -58,8 +77,10 @@ export function PricingCard({
           className="w-full"
           variant={isPopular ? "default" : "outline"}
           size="lg"
+          onClick={handleCheckout}
+          disabled={isLoading}
         >
-          Get Started
+          {isLoading ? "Loading..." : "Get Started"}
         </Button>
 
         {/* Features List */}

@@ -5,6 +5,7 @@ import {
   handleGenerationFailureFunction,
   handleGenerationCancellationFunction,
 } from "@/inngest/functions/handle-generation-failure";
+import { processPurchase } from "@/inngest/functions/process-purchase";
 
 /**
  * Inngest API route handler
@@ -24,5 +25,6 @@ export const { GET, POST, PUT } = serve({
     generatePlushieFunction,
     handleGenerationFailureFunction,
     handleGenerationCancellationFunction,
+    processPurchase,
   ],
 });

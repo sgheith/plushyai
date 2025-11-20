@@ -1,6 +1,6 @@
 import { inngest } from "@/inngest/client";
 import { db } from "@/lib/db";
-import { user, plushieGenerations } from "@/lib/schema";
+import { user, plushieGenerations, creditTransactions } from "@/lib/schema";
 import { put, del } from "@vercel/blob";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import { generateText } from "ai";
@@ -265,31 +265,51 @@ Make it look like a high-quality, professionally manufactured plush toy that som
 
       console.log("[Inngest] Detected subject type:", subjectType);
 
-      // Atomic credit deduction
-      const creditResult = await db
-        .update(user)
-        .set({ credits: sql`${user.credits} - 1` })
-        .where(and(eq(user.id, userId), gte(user.credits, 1)))
-        .returning();
+      // Atomic credit deduction with transaction tracking
+      await db.transaction(async (tx) => {
+        // Deduct credit from user
+        const creditResult = await tx
+          .update(user)
+          .set({ credits: sql`${user.credits} - 1` })
+          .where(and(eq(user.id, userId), gte(user.credits, 1)))
+          .returning();
 
-      if (creditResult.length === 0) {
-        throw new NonRetriableError(
-          "Credit deduction failed. Insufficient credits."
-        );
-      }
+        if (creditResult.length === 0) {
+          throw new NonRetriableError(
+            "Credit deduction failed. Insufficient credits."
+          );
+        }
 
-      // Update generation status to completed
-      await db
-        .update(plushieGenerations)
-        .set({
-          status: "completed",
-          subjectType,
-          updatedAt: new Date(),
-        })
-        .where(eq(plushieGenerations.id, generationId));
+        const updatedUser = creditResult[0];
 
-      console.log("[Inngest] Generation completed successfully", {
-        generationId,
+        // Record credit transaction
+        await tx.insert(creditTransactions).values({
+          userId,
+          type: "generation",
+          amount: -1,
+          balanceAfter: updatedUser.credits,
+          relatedId: generationId,
+          description: "Plushie generation completed",
+          metadata: {
+            generationId,
+            subjectType,
+          },
+        });
+
+        // Update generation status to completed
+        await tx
+          .update(plushieGenerations)
+          .set({
+            status: "completed",
+            subjectType,
+            updatedAt: new Date(),
+          })
+          .where(eq(plushieGenerations.id, generationId));
+
+        console.log("[Inngest] Generation completed successfully", {
+          generationId,
+          creditsRemaining: updatedUser.credits,
+        });
       });
     });
 

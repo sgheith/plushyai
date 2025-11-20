@@ -57,6 +57,13 @@
       "when": 1763363243892,
       "tag": "0007_naive_virginia_dare",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1763470243068,
+      "tag": "0008_elite_dagger",
+      "breakpoints": true
     }
   ]
 }

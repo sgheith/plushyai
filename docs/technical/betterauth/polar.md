@@ -1,7 +1,4 @@
-# plugins: Polar
-
-URL: /docs/plugins/polar
-Source: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/polar.mdx
+# Polar
 
 Better Auth Plugin for Payment and Checkouts using Polar
 

@@ -45,16 +45,24 @@ export default function PricingPage() {
       {/* Pricing Cards Section */}
       <section className="container mx-auto px-4 pb-16">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {mockPricingTiers.map((tier) => (
-            <PricingCard
-              key={tier.id}
-              name={tier.name}
-              price={tier.price}
-              credits={tier.credits}
-              features={tier.features}
-              isPopular={tier.isPopular}
-            />
-          ))}
+          {mockPricingTiers.map((tier) => {
+            // Extract slug from tier ID (e.g., "tier_basic" -> "basic")
+            // Map "elite" to "premium" to match Polar product configuration
+            const baseSlug = tier.id.replace("tier_", "");
+            const slug = baseSlug === "elite" ? "premium" : baseSlug;
+
+            return (
+              <PricingCard
+                key={tier.id}
+                name={tier.name}
+                price={tier.price}
+                credits={tier.credits}
+                features={tier.features}
+                isPopular={tier.isPopular}
+                slug={slug}
+              />
+            );
+          })}
         </div>
 
         <div className="text-center mt-8 text-sm text-muted-foreground">
